@@ -69,4 +69,66 @@ void save_wav_file(const std::vector<uint8_t>& raw, const std::string& file) {
     RNWHISPER_LOG_INFO("Saved audio file: %s\n", file.c_str());
 }
 
+void save_wav_file_incremental(const std::string& file, const std::vector<uint8_t>& data, bool append) {
+    std::ofstream output;
+
+    if (append) {
+        output.open(file, std::ios::binary | std::ios::app);
+        if (!output.is_open()) {
+            RNWHISPER_LOG_ERROR("Failed to open file for appending: %s\n", file.c_str());
+            return;
+        }
+    } else {
+        output.open(file, std::ios::binary);
+        if (!output.is_open()) {
+            RNWHISPER_LOG_ERROR("Failed to open file for writing: %s\n", file.c_str());
+            return;
+        }
+        // Write placeholder header (44 bytes)
+        std::vector<uint8_t> header(44, 0);
+        output.write(reinterpret_cast<const char*>(header.data()), header.size());
+    }
+
+    // Write audio data
+    output.write(reinterpret_cast<const char*>(data.data()), data.size());
+    output.close();
+}
+
+void finalize_wav_file(const std::string& file, int32_t dataSize) {
+    std::fstream output(file, std::ios::binary | std::ios::in | std::ios::out);
+    if (!output.is_open()) {
+        RNWHISPER_LOG_ERROR("Failed to open file for updating: %s\n", file.c_str());
+        return;
+    }
+
+    // Write WAV header with correct sizes
+    output.seekp(0, std::ios::beg);
+    // RIFF header
+    output.write("RIFF", 4);
+    int32_t chunk_size = 36 + dataSize;
+    output.write(reinterpret_cast<char*>(&chunk_size), 4);
+    output.write("WAVE", 4);
+    // fmt subchunk
+    output.write("fmt ", 4);
+    int32_t sub_chunk_size = 16;
+    output.write(reinterpret_cast<char*>(&sub_chunk_size), 4);
+    short audio_format = 1;
+    output.write(reinterpret_cast<char*>(&audio_format), 2);
+    short num_channels = 1;
+    output.write(reinterpret_cast<char*>(&num_channels), 2);
+    int32_t sample_rate = WHISPER_SAMPLE_RATE;
+    output.write(reinterpret_cast<char*>(&sample_rate), 4);
+    int32_t byte_rate = WHISPER_SAMPLE_RATE * 2;
+    output.write(reinterpret_cast<char*>(&byte_rate), 4);
+    short block_align = 2;
+    output.write(reinterpret_cast<char*>(&block_align), 2);
+    short bits_per_sample = 16;
+    output.write(reinterpret_cast<char*>(&bits_per_sample), 2);
+    // data subchunk
+    output.write("data", 4);
+    output.write(reinterpret_cast<char*>(&dataSize), 4);
+
+    output.close();
+}
+
 } // namespace rnaudioutils

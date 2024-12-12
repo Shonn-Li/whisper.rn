@@ -81,6 +81,12 @@ export type AudioSessionSettingIos = {
 
 // Codegen missing TSIntersectionType support so we dont put it into the native spec
 export type TranscribeRealtimeOptions = TranscribeOptions & {
+  /** Audio step size in milliseconds (Default: 500) */
+  stepMs?: number;
+  /** Audio length to process in milliseconds (Default: 5000) */
+  lengthMs?: number;
+  /** Length of previous audio to keep for context in milliseconds (Default: 2000) */
+  keepMs?: number;
   /**
    * Realtime record max duration in seconds.
    * Due to the whisper.cpp hard constraint - processes the audio in chunks of 30 seconds,
@@ -397,7 +403,7 @@ export class WhisperContext {
         }
       }
 
-      // iOS: Update audio session state
+      // iOS: Update audio session state 
       await updateAudioSession(options?.audioSessionOnStartIos)
     }
     if (Platform.OS === 'ios' && typeof options?.audioSessionOnStopIos === 'object') {

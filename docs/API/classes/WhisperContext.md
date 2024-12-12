@@ -37,7 +37,7 @@
 
 #### Defined in
 
-[index.ts:203](https://github.com/Shonn-Li/whisper.rn/blob/c1bd3f8/src/index.ts#L203)
+[index.ts:209](https://github.com/Shonn-Li/whisper.rn/blob/26a8058/src/index.ts#L209)
 
 ## Properties
 
@@ -47,7 +47,7 @@
 
 #### Defined in
 
-[index.ts:199](https://github.com/Shonn-Li/whisper.rn/blob/c1bd3f8/src/index.ts#L199)
+[index.ts:205](https://github.com/Shonn-Li/whisper.rn/blob/26a8058/src/index.ts#L205)
 
 ___
 
@@ -57,7 +57,7 @@ ___
 
 #### Defined in
 
-[index.ts:197](https://github.com/Shonn-Li/whisper.rn/blob/c1bd3f8/src/index.ts#L197)
+[index.ts:203](https://github.com/Shonn-Li/whisper.rn/blob/26a8058/src/index.ts#L203)
 
 ___
 
@@ -67,7 +67,7 @@ ___
 
 #### Defined in
 
-[index.ts:201](https://github.com/Shonn-Li/whisper.rn/blob/c1bd3f8/src/index.ts#L201)
+[index.ts:207](https://github.com/Shonn-Li/whisper.rn/blob/26a8058/src/index.ts#L207)
 
 ## Methods
 
@@ -87,7 +87,7 @@ ___
 
 #### Defined in
 
-[index.ts:465](https://github.com/Shonn-Li/whisper.rn/blob/c1bd3f8/src/index.ts#L465)
+[index.ts:471](https://github.com/Shonn-Li/whisper.rn/blob/26a8058/src/index.ts#L471)
 
 ___
 
@@ -101,7 +101,7 @@ ___
 
 #### Defined in
 
-[index.ts:471](https://github.com/Shonn-Li/whisper.rn/blob/c1bd3f8/src/index.ts#L471)
+[index.ts:477](https://github.com/Shonn-Li/whisper.rn/blob/26a8058/src/index.ts#L477)
 
 ___
 
@@ -130,7 +130,7 @@ base64: need add `data:audio/wav;base64,` prefix
 
 #### Defined in
 
-[index.ts:291](https://github.com/Shonn-Li/whisper.rn/blob/c1bd3f8/src/index.ts#L291)
+[index.ts:297](https://github.com/Shonn-Li/whisper.rn/blob/26a8058/src/index.ts#L297)
 
 ___
 
@@ -158,7 +158,7 @@ Transcribe audio data (base64 encoded float32 PCM data)
 
 #### Defined in
 
-[index.ts:323](https://github.com/Shonn-Li/whisper.rn/blob/c1bd3f8/src/index.ts#L323)
+[index.ts:329](https://github.com/Shonn-Li/whisper.rn/blob/26a8058/src/index.ts#L329)
 
 ___
 
@@ -180,7 +180,7 @@ Transcribe the microphone audio stream, the microphone user permission is requir
 
 #### Defined in
 
-[index.ts:331](https://github.com/Shonn-Li/whisper.rn/blob/c1bd3f8/src/index.ts#L331)
+[index.ts:337](https://github.com/Shonn-Li/whisper.rn/blob/26a8058/src/index.ts#L337)
 
 ___
 
@@ -207,4 +207,4 @@ ___
 
 #### Defined in
 
-[index.ts:213](https://github.com/Shonn-Li/whisper.rn/blob/c1bd3f8/src/index.ts#L213)
+[index.ts:219](https://github.com/Shonn-Li/whisper.rn/blob/26a8058/src/index.ts#L219)

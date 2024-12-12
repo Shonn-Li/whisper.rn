@@ -25,12 +25,26 @@ typedef struct {
     int sliceIndex;
     int transcribeSliceIndex;
     NSString* audioOutputPath;
+    
+    int step_ms;
+    int length_ms;
+    int keep_ms;
 
+    int step_samples;
+    int length_samples;
+    int keep_samples;
+
+    NSMutableData *pcm_buffer;
+
+    int32_t *prompt_tokens;
+    int n_prompt_tokens;
     AudioQueueRef queue;
     AudioStreamBasicDescription dataFormat;
     AudioQueueBufferRef buffers[NUM_BUFFERS];
 
     void (^transcribeHandler)(int, NSString *, NSDictionary *);
+    
+    NSUInteger new_samples_count;
 } RNWhisperContextRecordState;
 
 @interface RNWhisperContext : NSObject {
