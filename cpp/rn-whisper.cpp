@@ -162,7 +162,12 @@ void job::set_realtime_params(
     audio_sec = sec > 0 ? sec : DEFAULT_MAX_AUDIO_SEC;
     audio_slice_sec = slice_sec > 0 && slice_sec < audio_sec ? slice_sec : audio_sec;
     audio_min_sec = min_sec >= 0.5 && min_sec <= audio_slice_sec ? min_sec : 1.0f;
-    audio_output_path = output_path;
+
+    if (output_path && strlen(output_path) > 0) {
+        audio_output_path = strdup(output_path);
+    } else {
+        audio_output_path = nullptr;
+    }
 }
 
 bool job::vad_simple(int slice_index, int n_samples, int n) {
@@ -219,6 +224,10 @@ job::~job() {
         delete[] pcm_slices[i];
     }
     pcm_slices.clear();
+    if (audio_output_path) {
+        free((void*)audio_output_path);
+        audio_output_path = nullptr;
+    }
 }
 
 std::unordered_map<int, job*> job_map;

@@ -153,6 +153,11 @@
 
     // Initialize PCM buffer
     self->recordState.pcm_buffer = [NSMutableData data];
+        if (state->job->audio_output_path && strlen(state->job->audio_output_path) > 0) {
+        state->audioFilePath = [NSString stringWithUTF8String:state->job->audio_output_path];
+        state->audioDataSize = 0;
+    }
+
 }
 
 bool vad(RNWhisperContextRecordState *state, int sliceIndex, int nSamples, int n)
@@ -309,7 +314,7 @@ void AudioInputCallback(void *inUserData, AudioQueueRef inAQ, AudioQueueBufferRe
     state->transcribeHandler(state->job->job_id, @"transcribe", handlerResult);
 
     // Append audio data to file
-    [self appendAudioDataToFile:audioDataToProcess];
+    [self appendAudioDataToFile:audioDataToProcess state:state];
 
     free(pcm_f32);
     state->isTranscribing = false;
@@ -362,21 +367,19 @@ void AudioInputCallback(void *inUserData, AudioQueueRef inAQ, AudioQueueBufferRe
     return result;
 }
 
-- (void)appendAudioDataToFile:(NSData *)audioData {
-    if (!audioFilePath) {
-        NSString *filePath = [NSString stringWithUTF8String:state->job->audio_output_path];
-        audioFilePath = filePath;
-        audioDataSize = 0;
-
-        // Initialize file with placeholder header
-        [self initializeAudioFileAtPath:filePath];
+- (void)appendAudioDataToFile:(NSData *)audioData state:(RNWhisperContextRecordState *)state {
+    if (!state->audioFilePath) {
+        // Initialize audio file with placeholder header
+        [self initializeAudioFileAtPath:state->audioFilePath];
     }
 
     // Write audio data
-    [self writeAudioData:audioData toFile:audioFilePath];
+    [self writeAudioData:audioData toFile:state->audioFilePath];
 
-    audioDataSize += (int32_t)audioData.length;
+    // Update audioDataSize
+    state->audioDataSize += (int32_t)audioData.length;
 }
+
 - (void)initializeAudioFileAtPath:(NSString *)filePath {
     // Create file and write placeholder header
     [[NSFileManager defaultManager] createFileAtPath:filePath contents:nil attributes:nil];
@@ -397,11 +400,11 @@ void AudioInputCallback(void *inUserData, AudioQueueRef inAQ, AudioQueueBufferRe
     [fileHandle closeFile];
 }
 
-- (void)finalizeAudioFile {
-    if (audioFilePath && audioDataSize > 0) {
-        [self updateWAVHeaderAtPath:audioFilePath dataSize:audioDataSize];
-        audioFilePath = nil;
-        audioDataSize = 0;
+- (void)finalizeAudioFileWithState:(RNWhisperContextRecordState *)state {
+    if (state->audioFilePath && state->audioDataSize > 0) {
+        [self updateWAVHeaderAtPath:state->audioFilePath dataSize:state->audioDataSize];
+        state->audioFilePath = nil;
+        state->audioDataSize = 0;
     }
 }
 - (void)updateWAVHeaderAtPath:(NSString *)filePath dataSize:(int32_t)dataSize {
@@ -451,7 +454,7 @@ void AudioInputCallback(void *inUserData, AudioQueueRef inAQ, AudioQueueBufferRe
 - (void)finishRealtimeTranscribe:(RNWhisperContextRecordState*) state result:(NSDictionary*)result {
     // Finalize WAV file if needed
     if (state->job->audio_output_path != nullptr) {
-        [self finalizeAudioFile];
+        [self finalizeAudioFileWithState:state];
     }
     state->transcribeHandler(state->job->job_id, @"end", result);
     rnwhisper::job_remove(state->job->job_id);
@@ -566,18 +569,18 @@ void AudioInputCallback(void *inUserData, AudioQueueRef inAQ, AudioQueueBufferRe
 }
 
 - (void)invalidate {
-    if (self->recordState.isCapturing) {
+    if (recordState.isCapturing) {
         [self stopAudio];
     }
 
-    if (self->prompt_tokens) {
-        free(self->prompt_tokens);
-        self->prompt_tokens = NULL;
+    if (recordState.prompt_tokens) {
+        free(recordState.prompt_tokens);
+        recordState.prompt_tokens = NULL;
     }
 
-    [self finalizeAudioFile];
+    [self finalizeAudioFileWithState:&recordState];
 
-    // Other cleanup code...
+    // Existing cleanup code...
 }
 
 

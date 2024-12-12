@@ -25,6 +25,7 @@ typedef struct {
     int sliceIndex;
     int transcribeSliceIndex;
     NSString* audioOutputPath;
+    int32_t audioDataSize;
     
     int step_ms;
     int length_ms;
