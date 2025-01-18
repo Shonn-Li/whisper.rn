@@ -270,20 +270,43 @@ void AudioInputCallback(void * inUserData,
     state->job->put_pcm_data((short*) inBuffer->mAudioData, state->sliceIndex, nSamples, n);
 
     bool isSpeech = vad(state, state->sliceIndex, nSamples, n);
-    nSamples += n;
-    state->sliceNSamples[state->sliceIndex] = nSamples;
+    // nSamples += n;
+    state->sliceNSamples[state->sliceIndex] = nSamples + n;
 
     AudioQueueEnqueueBuffer(state->queue, inBuffer, 0, NULL);
 
-    bool isSamplesEnough = nSamples / WHISPER_SAMPLE_RATE >= state->job->audio_min_sec;
-    if (!isSamplesEnough || !isSpeech) return;
+    // bool isSamplesEnough = nSamples / WHISPER_SAMPLE_RATE >= state->job->audio_min_sec;
+    // if (!isSamplesEnough || !isSpeech) return;
 
-    if (!state->isTranscribing) {
-        state->isTranscribing = true;
-        dispatch_async([state->mSelf getDispatchQueue], ^{
-            [state->mSelf fullTranscribeSamples:state];
-        });
+    // if (!state->isTranscribing) {
+    //     state->isTranscribing = true;
+    //     dispatch_async([state->mSelf getDispatchQueue], ^{
+    //         [state->mSelf fullTranscribeSamples:state];
+    //     });
+    // }
+
+
+    // Track previous and current slice duration to check if we cross the multiplier
+    float previousSliceDuration = (float)(nSamples) / WHISPER_SAMPLE_RATE;
+    float currentSliceDuration = (float)(state->sliceNSamples[state->sliceIndex]) / WHISPER_SAMPLE_RATE;
+
+    int previousMultiplier = (int)(previousSliceDuration / state->job->audio_min_sec);
+    int currentMultiplier = (int)(currentSliceDuration / state->job->audio_min_sec);
+
+    // If the multipliers differ, we have crossed the threshold
+    if (previousMultiplier != currentMultiplier) {
+        bool isSamplesEnough = currentSliceDuration >= state->job->audio_min_sec;
+
+        if (isSamplesEnough) {
+            if (!state->isTranscribing) {
+                state->isTranscribing = true;
+                dispatch_async([state->mSelf getDispatchQueue], ^{
+                    [state->mSelf fullTranscribeSamples:state];
+                });
+            }
+        }
     }
+
 }
 
 - (void)finishRealtimeTranscribe:(RNWhisperContextRecordState*) state result:(NSDictionary*)result {
