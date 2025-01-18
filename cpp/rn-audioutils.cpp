@@ -86,7 +86,7 @@ void WavWriter::finalize() {
 
     RNWHISPER_LOG_INFO("WavWriter::finalize: Finalized WAV. Total samples = %zu\n", totalSamplesWritten);
 }
-
+// used by JAVA version
 
 std::vector<uint8_t> concat_short_buffers(const std::vector<short*>& buffers, const std::vector<int>& slice_n_samples) {
     

@@ -42,11 +42,6 @@ struct job {
 
     void set_realtime_params(vad_params vad, int sec, int slice_sec, float min_sec, const char* output_path);
 
-    // NEW: open/append/close raw file
-    void open_raw_file(const char* path);
-    void append_raw_data(short* data, int n);
-    void close_raw_file();
-
     // For freeing slices after done with them
     void free_slice(int slice_index);
 

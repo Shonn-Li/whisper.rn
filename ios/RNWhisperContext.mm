@@ -164,6 +164,40 @@ float calculateRMS(AudioQueueBufferRef buffer) {
     return sqrt(sum / frameCount);
 }
 
+void audioVolumeChangeCallback(AudioQueueBufferRef buffer) {
+    float rms = calculateRMS(buffer);
+    int volumeLevel = 0;
+    if (rms < 0.01) {
+        volumeLevel = 0; // Very quiet or silent
+    } else if (rms < 0.05) {
+        volumeLevel = 1; // Quiet
+    } else if (rms < 0.1) {
+        volumeLevel = 2; // Moderate
+    } else if (rms < 0.15) {
+        volumeLevel = 3; // Moderately loud
+    } else if (rms < 0.2) {
+        volumeLevel = 4; // Loud
+    } else if (rms < 0.3) {
+        volumeLevel = 5; // Very loud
+    } else {
+        volumeLevel = 6; // Extremely loud
+    }
+    NSLog(@"[custom-RNWhisper] Volume level: %d", volumeLevel);
+
+    if (volumeLevel != state->currentVolumeLevel) {
+        state->currentVolumeLevel = volumeLevel;
+
+        // Prepare result dictionary
+        NSDictionary *result = @{
+            @"volume": @(volumeLevel)
+        };
+
+        // Call transcribeHandler with eventType 'volumeChange'
+        state->transcribeHandler(state->job->job_id, @"volumeChange", result);
+    }
+
+}
+
 
 void AudioInputCallback(void * inUserData,
     AudioQueueRef inAQ,
@@ -183,38 +217,8 @@ void AudioInputCallback(void * inUserData,
         AudioQueueEnqueueBuffer(state->queue, inBuffer, 0, NULL);
         return;
     }
-    // Calculate RMS
-    float rms = calculateRMS(inBuffer);
 
-    // Determine volume level based on RMS
-    int volumeLevel = 0;
-    if (rms < 0.01) {
-        volumeLevel = 0; // Very quiet or silent
-    } else if (rms < 0.05) {
-        volumeLevel = 1; // Quiet
-    } else if (rms < 0.1) {
-        volumeLevel = 2; // Moderate
-    } else if (rms < 0.15) {
-        volumeLevel = 3; // Moderately loud
-    } else if (rms < 0.2) {
-        volumeLevel = 4; // Loud
-    } else if (rms < 0.3) {
-        volumeLevel = 5; // Very loud
-    } else {
-        volumeLevel = 6; // Extremely loud
-    }
-
-    if (volumeLevel != state->currentVolumeLevel) {
-        state->currentVolumeLevel = volumeLevel;
-
-        // Prepare result dictionary
-        NSDictionary *result = @{
-            @"volume": @(volumeLevel)
-        };
-
-        // Call transcribeHandler with eventType 'volumeChange'
-        state->transcribeHandler(state->job->job_id, @"volumeChange", result);
-    }
+    audioVolumeChangeCallback(inBuffer);
 
     int totalNSamples = 0;
     for (int i = 0; i < state->sliceNSamples.size(); i++) {
@@ -251,39 +255,71 @@ void AudioInputCallback(void * inUserData,
         }
         return;
     }
+    // Calculate the remaining space in the current slice before adding the new samples
+    int remainingSpaceInCurrentSlice = state->job->audio_slice_sec * WHISPER_SAMPLE_RATE - nSamples;
 
-    if (nSamples + n > state->job->audio_slice_sec * WHISPER_SAMPLE_RATE) {
-        // next slice
+    // If the buffer exceeds the remaining space in the current slice, we need to split the buffer
+    if (n > remainingSpaceInCurrentSlice) {
+        int remainingSamples = remainingSpaceInCurrentSlice;
+        int newSamplesForNextSlice = n - remainingSamples;
+
+        // Write the data to the current slice
+        state->job->put_pcm_data((short*)inBuffer->mAudioData, state->sliceIndex, nSamples, remainingSamples);
+
+        // Finish the current slice and trigger transcription one last time for this slice
+        if (state->sliceNSamples[state->sliceIndex] / WHISPER_SAMPLE_RATE >= state->job->audio_min_sec) {
+            state->isTranscribing = true;
+            dispatch_async([state->mSelf getDispatchQueue], ^{
+                [state->mSelf fullTranscribeSamples:state];
+            });
+        }
+
+        // Move to the next slice and add the remaining samples to it
         state->sliceIndex++;
-        nSamples = 0;
-        state->sliceNSamples.push_back(0);
+        state->sliceNSamples.push_back(newSamplesForNextSlice);
+        
+        // Write the remaining data to the new slice
+        state->job->put_pcm_data((short*)inBuffer->mAudioData + remainingSamples, state->sliceIndex, 0, newSamplesForNextSlice);
+
+        // Log the split action
+        NSLog(@"[custom-RNWhisper] Exceeded current slice, split buffer into two parts");
+
+    } else {
+        // If the current slice has enough space, just add the data to it
+        state->sliceNSamples[state->sliceIndex] += n;
+        state->job->put_pcm_data((short*)inBuffer->mAudioData, state->sliceIndex, nSamples, n);
     }
 
-    NSLog(@"[custom-RNWhisper] Slice %d has %d samples, put %d samples", state->sliceIndex, nSamples, n);
+    // Track previous and current slice duration to check if we cross the multiplier
+    float previousSliceDuration = (float)(nSamples) / WHISPER_SAMPLE_RATE;
+    float currentSliceDuration = (float)(state->sliceNSamples[state->sliceIndex]) / WHISPER_SAMPLE_RATE;
+
+    int previousMultiplier = (int)(previousSliceDuration / state->job->audio_min_sec);
+    int currentMultiplier = (int)(currentSliceDuration / state->job->audio_min_sec);
+
+    // If the multipliers differ, we have crossed the threshold
+    if (previousMultiplier != currentMultiplier) {
+        bool isSamplesEnough = currentSliceDuration >= state->job->audio_min_sec;
+
+        if (isSamplesEnough) {
+            if (!state->isTranscribing) {
+                state->isTranscribing = true;
+                dispatch_async([state->mSelf getDispatchQueue], ^{
+                    [state->mSelf fullTranscribeSamples:state];
+                });
+            }
+        }
+    }
 
     // Append to WAV
     if (state->wavWriter) {
         const int n = inBuffer->mAudioDataByteSize / sizeof(short);
         state->wavWriter->appendSamples((short*) inBuffer->mAudioData, n);
     }
-    
-    state->job->put_pcm_data((short*) inBuffer->mAudioData, state->sliceIndex, nSamples, n);
 
+    // Perform Voice Activity Detection (VAD) and enqueue the buffer
     bool isSpeech = vad(state, state->sliceIndex, nSamples, n);
-    nSamples += n;
-    state->sliceNSamples[state->sliceIndex] = nSamples;
-
     AudioQueueEnqueueBuffer(state->queue, inBuffer, 0, NULL);
-
-    bool isSamplesEnough = nSamples / WHISPER_SAMPLE_RATE >= state->job->audio_min_sec;
-    if (!isSamplesEnough || !isSpeech) return;
-
-    if (!state->isTranscribing) {
-        state->isTranscribing = true;
-        dispatch_async([state->mSelf getDispatchQueue], ^{
-            [state->mSelf fullTranscribeSamples:state];
-        });
-    }
 }
 
 - (void)finishRealtimeTranscribe:(RNWhisperContextRecordState*) state result:(NSDictionary*)result {
@@ -421,10 +457,6 @@ void AudioInputCallback(void * inUserData,
     self->recordState.transcribeHandler = onTranscribe;
 
     [self prepareRealtime:jobId options:options];
-
-    // if (options[@"audioOutputPath"] != nil) {
-    //     self->recordState.job->open_raw_file([options[@"audioOutputPath"] UTF8String]);
-    // }
 
     //////////////////////////////////////////////////////////////////////////
     // If we want incremental WAV writing instead of raw:
