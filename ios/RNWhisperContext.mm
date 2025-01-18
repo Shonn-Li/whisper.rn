@@ -164,7 +164,8 @@ float calculateRMS(AudioQueueBufferRef buffer) {
     return sqrt(sum / frameCount);
 }
 
-void audioVolumeChangeCallback(AudioQueueBufferRef buffer) {
+void audioVolumeChangeCallback(void * inUserData, AudioQueueBufferRef buffer) {
+    RNWhisperContextRecordState *state = (RNWhisperContextRecordState *)inUserData;
     float rms = calculateRMS(buffer);
     int volumeLevel = 0;
     if (rms < 0.01) {
@@ -218,7 +219,7 @@ void AudioInputCallback(void * inUserData,
         return;
     }
 
-    audioVolumeChangeCallback(inBuffer);
+    audioVolumeChangeCallback(inUserData, inBuffer);
 
     int totalNSamples = 0;
     for (int i = 0; i < state->sliceNSamples.size(); i++) {
