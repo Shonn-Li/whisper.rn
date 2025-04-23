@@ -1,28 +1,32 @@
 #!/bin/bash -e
 
 git submodule init
-git submodule update --recursive
+git submodule update --remote --recursive
 
 cp ./whisper.cpp/ggml/include/ggml.h ./cpp/ggml.h
+
 cp ./whisper.cpp/ggml/include/ggml-alloc.h ./cpp/ggml-alloc.h
 cp ./whisper.cpp/ggml/include/ggml-backend.h ./cpp/ggml-backend.h
 cp ./whisper.cpp/ggml/include/ggml-metal.h ./cpp/ggml-metal.h
+cp ./whisper.cpp/ggml/include/gguf.h ./cpp/gguf.h
+cp ./whisper.cpp/ggml/include/ggml-backend.h ./cpp/ggml-backend.h
 
 cp ./whisper.cpp/ggml/src/ggml.c ./cpp/ggml.c
-cp ./whisper.cpp/ggml/src/ggml-metal.m ./cpp/ggml-metal.m
+cp ./whisper.cpp/ggml/src/ggml-metal/ggml-metal.m ./cpp/ggml-metal.m
 cp ./whisper.cpp/ggml/src/ggml-alloc.c ./cpp/ggml-alloc.c
 cp ./whisper.cpp/ggml/src/ggml-backend.cpp ./cpp/ggml-backend.cpp
 cp ./whisper.cpp/ggml/src/ggml-backend-impl.h ./cpp/ggml-backend-impl.h
 cp ./whisper.cpp/ggml/src/ggml-impl.h ./cpp/ggml-impl.h
-cp ./whisper.cpp/ggml/src/ggml-cpu-impl.h ./cpp/ggml-cpu-impl.h
+cp ./whisper.cpp/ggml/src/ggml-cpu/ggml-cpu-impl.h ./cpp/ggml-cpu-impl.h
 cp ./whisper.cpp/ggml/src/ggml-common.h ./cpp/ggml-common.h
 cp ./whisper.cpp/ggml/src/ggml-quants.h ./cpp/ggml-quants.h
 cp ./whisper.cpp/ggml/src/ggml-quants.c ./cpp/ggml-quants.c
-cp ./whisper.cpp/ggml/src/ggml-aarch64.c ./cpp/ggml-aarch64.c
-cp ./whisper.cpp/ggml/src/ggml-aarch64.h ./cpp/ggml-aarch64.h
+cp ./whisper.cpp/ggml/src/ggml-cpu/ggml-cpu-aarch64.cpp ./cpp/ggml-cpu-aarch64.cpp
+cp ./whisper.cpp/ggml/src/ggml-cpu/ggml-cpu-aarch64.h ./cpp/ggml-cpu-aarch64.h
 
 cp ./whisper.cpp/include/whisper.h ./cpp/whisper.h
 cp ./whisper.cpp/src/whisper.cpp ./cpp/whisper.cpp
+cp ./whisper.cpp/src/whisper-arch.h ./cpp/whisper-arch.h
 
 rm -rf ./cpp/coreml/
 cp -R ./whisper.cpp/src/coreml/ ./cpp/coreml/

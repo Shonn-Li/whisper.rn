@@ -2,6 +2,7 @@
 #define WHISPER_H
 
 #include "ggml.h"
+#include "ggml-cpu.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -114,7 +115,6 @@ extern "C" {
 
     struct whisper_context_params {
         bool  use_gpu;
-        bool  use_coreml;
         bool  flash_attn;
         int   gpu_device;  // CUDA device
 
@@ -425,21 +425,11 @@ extern "C" {
 
     // Performance information from the default state.
     struct whisper_timings {
-        int64_t load_us;
-        int64_t t_start_us;
-        int32_t fail_p;
-        int32_t fail_h;
-        int64_t t_mel_us;
-        int32_t n_sample;
-        int32_t n_encode;
-        int32_t n_decode;
-        int32_t n_batchd;
-        int32_t n_prompt;
-        int64_t t_sample_us;
-        int64_t t_encode_us;
-        int64_t t_decode_us;
-        int64_t t_batchd_us;
-        int64_t t_prompt_us;
+        float sample_ms;
+        float encode_ms;
+        float decode_ms;
+        float batchd_ms;
+        float prompt_ms;
     };
     WHISPER_API struct whisper_timings * whisper_get_timings(struct whisper_context * ctx);
     WHISPER_API void whisper_print_timings(struct whisper_context * ctx);
@@ -532,8 +522,8 @@ extern "C" {
         bool detect_language;
 
         // common decoding parameters:
-        bool suppress_blank;    // ref: https://github.com/openai/whisper/blob/f82bc59f5ea234d4b97fb2860842ed38519f7e65/whisper/decoding.py#L89
-        bool suppress_non_speech_tokens; // ref: https://github.com/openai/whisper/blob/7858aa9c08d98f75575035ecd6481f462d66ca27/whisper/tokenizer.py#L224-L253
+        bool suppress_blank; // ref: https://github.com/openai/whisper/blob/f82bc59f5ea234d4b97fb2860842ed38519f7e65/whisper/decoding.py#L89
+        bool suppress_nst;   // non-speech tokens, ref: https://github.com/openai/whisper/blob/7858aa9c08d98f75575035ecd6481f462d66ca27/whisper/tokenizer.py#L224-L253
 
         float temperature;      // initial decoding temperature, ref: https://ai.stackexchange.com/a/32478
         float max_initial_ts;   // ref: https://github.com/openai/whisper/blob/f82bc59f5ea234d4b97fb2860842ed38519f7e65/whisper/decoding.py#L97
@@ -544,7 +534,7 @@ extern "C" {
         float temperature_inc;
         float entropy_thold;    // similar to OpenAI's "compression_ratio_threshold"
         float logprob_thold;
-        float no_speech_thold;  // TODO: not implemented
+        float no_speech_thold;
 
         struct {
             int best_of;    // ref: https://github.com/openai/whisper/blob/f82bc59f5ea234d4b97fb2860842ed38519f7e65/whisper/transcribe.py#L264
@@ -675,6 +665,9 @@ extern "C" {
 
     WHISPER_API void whisper_log_set(wsp_ggml_log_callback log_callback, void * user_data);
 
+    // Get the no_speech probability for the specified segment
+    WHISPER_API float whisper_full_get_segment_no_speech_prob           (struct whisper_context * ctx, int i_segment);
+    WHISPER_API float whisper_full_get_segment_no_speech_prob_from_state(struct whisper_state * state, int i_segment);
 #ifdef __cplusplus
 }
 #endif

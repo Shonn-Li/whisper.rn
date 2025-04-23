@@ -110,6 +110,9 @@
     params.n_threads        = n_threads > 0 ? n_threads : default_n_threads;
     params.offset_ms        = 0;
     params.no_context       = false;
+    params.suppress_nst     = true;
+    params.suppress_blank   = true;
+    params.no_speech_thold  = 0.8;
     params.split_on_word = false;
     params.single_segment   = false;
     // params.suppress_non_speech_tokens = true;

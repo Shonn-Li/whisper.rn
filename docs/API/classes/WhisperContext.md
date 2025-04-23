@@ -24,6 +24,7 @@
 - [transcribeData](WhisperContext.md#transcribedata)
 - [transcribeRealtime](WhisperContext.md#transcriberealtime)
 - [transcribeWithNativeMethod](WhisperContext.md#transcribewithnativemethod)
+- [finalizeWavFile](WhisperContext.md#finalizewavfile)
 
 ## Constructors
 
@@ -39,7 +40,7 @@
 
 #### Defined in
 
-[index.ts:213](https://github.com/Shonn-Li/whisper.rn/blob/78d762f/src/index.ts#L213)
+[index.ts:213](https://github.com/Shonn-Li/whisper.rn/blob/64b90ee/src/index.ts#L213)
 
 ## Properties
 
@@ -49,7 +50,7 @@
 
 #### Defined in
 
-[index.ts:209](https://github.com/Shonn-Li/whisper.rn/blob/78d762f/src/index.ts#L209)
+[index.ts:209](https://github.com/Shonn-Li/whisper.rn/blob/64b90ee/src/index.ts#L209)
 
 ___
 
@@ -59,7 +60,7 @@ ___
 
 #### Defined in
 
-[index.ts:207](https://github.com/Shonn-Li/whisper.rn/blob/78d762f/src/index.ts#L207)
+[index.ts:207](https://github.com/Shonn-Li/whisper.rn/blob/64b90ee/src/index.ts#L207)
 
 ___
 
@@ -69,7 +70,7 @@ ___
 
 #### Defined in
 
-[index.ts:211](https://github.com/Shonn-Li/whisper.rn/blob/78d762f/src/index.ts#L211)
+[index.ts:211](https://github.com/Shonn-Li/whisper.rn/blob/64b90ee/src/index.ts#L211)
 
 ## Methods
 
@@ -89,7 +90,7 @@ ___
 
 #### Defined in
 
-[index.ts:493](https://github.com/Shonn-Li/whisper.rn/blob/78d762f/src/index.ts#L493)
+[index.ts:493](https://github.com/Shonn-Li/whisper.rn/blob/64b90ee/src/index.ts#L493)
 
 ___
 
@@ -103,7 +104,7 @@ ___
 
 #### Defined in
 
-[index.ts:511](https://github.com/Shonn-Li/whisper.rn/blob/78d762f/src/index.ts#L511)
+[index.ts:511](https://github.com/Shonn-Li/whisper.rn/blob/64b90ee/src/index.ts#L511)
 
 ___
 
@@ -117,7 +118,7 @@ ___
 
 #### Defined in
 
-[index.ts:507](https://github.com/Shonn-Li/whisper.rn/blob/78d762f/src/index.ts#L507)
+[index.ts:507](https://github.com/Shonn-Li/whisper.rn/blob/64b90ee/src/index.ts#L507)
 
 ___
 
@@ -131,7 +132,7 @@ ___
 
 #### Defined in
 
-[index.ts:515](https://github.com/Shonn-Li/whisper.rn/blob/78d762f/src/index.ts#L515)
+[index.ts:515](https://github.com/Shonn-Li/whisper.rn/blob/64b90ee/src/index.ts#L515)
 
 ___
 
@@ -160,7 +161,7 @@ base64: need add `data:audio/wav;base64,` prefix
 
 #### Defined in
 
-[index.ts:301](https://github.com/Shonn-Li/whisper.rn/blob/78d762f/src/index.ts#L301)
+[index.ts:301](https://github.com/Shonn-Li/whisper.rn/blob/64b90ee/src/index.ts#L301)
 
 ___
 
@@ -188,7 +189,7 @@ Transcribe audio data (base64 encoded float32 PCM data)
 
 #### Defined in
 
-[index.ts:333](https://github.com/Shonn-Li/whisper.rn/blob/78d762f/src/index.ts#L333)
+[index.ts:333](https://github.com/Shonn-Li/whisper.rn/blob/64b90ee/src/index.ts#L333)
 
 ___
 
@@ -210,7 +211,7 @@ Transcribe the microphone audio stream, the microphone user permission is requir
 
 #### Defined in
 
-[index.ts:344](https://github.com/Shonn-Li/whisper.rn/blob/78d762f/src/index.ts#L344)
+[index.ts:344](https://github.com/Shonn-Li/whisper.rn/blob/64b90ee/src/index.ts#L344)
 
 ___
 
@@ -237,4 +238,24 @@ ___
 
 #### Defined in
 
-[index.ts:219](https://github.com/Shonn-Li/whisper.rn/blob/78d762f/src/index.ts#L219)
+[index.ts:219](https://github.com/Shonn-Li/whisper.rn/blob/64b90ee/src/index.ts#L219)
+
+___
+
+### finalizeWavFile
+
+▸ `Static` **finalizeWavFile**(`filePath`): `Promise`\<`void`\>
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `filePath` | `string` |
+
+#### Returns
+
+`Promise`\<`void`\>
+
+#### Defined in
+
+[index.ts:519](https://github.com/Shonn-Li/whisper.rn/blob/64b90ee/src/index.ts#L519)

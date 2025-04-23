@@ -8,6 +8,8 @@
 extern "C" {
 #endif
 
+    #define WSP_GGML_BACKEND_API_VERSION 1
+
     //
     // Backend buffer type
     //
@@ -22,7 +24,7 @@ extern "C" {
         size_t                (*get_max_size)  (wsp_ggml_backend_buffer_type_t buft);
         // (optional) data size needed to allocate the tensor, including padding (defaults to wsp_ggml_nbytes)
         size_t                (*get_alloc_size)(wsp_ggml_backend_buffer_type_t buft, const struct wsp_ggml_tensor * tensor);
-        // (optional) check if tensor data is in host memory (defaults to false)
+        // (optional) check if tensor data is in host memory and uses standard ggml tensor layout (defaults to false)
         bool                  (*is_host)       (wsp_ggml_backend_buffer_type_t buft);
     };
 
@@ -37,13 +39,12 @@ extern "C" {
     //
 
     struct wsp_ggml_backend_buffer_i {
-        const char * (*get_name)     (wsp_ggml_backend_buffer_t buffer);
         // (optional) free the buffer
         void         (*free_buffer)  (wsp_ggml_backend_buffer_t buffer);
         // base address of the buffer
         void *       (*get_base)     (wsp_ggml_backend_buffer_t buffer);
         // (optional) initialize a tensor in the buffer (eg. add tensor extras)
-        void         (*init_tensor)  (wsp_ggml_backend_buffer_t buffer, struct wsp_ggml_tensor * tensor);
+        enum wsp_ggml_status (*init_tensor)(wsp_ggml_backend_buffer_t buffer, struct wsp_ggml_tensor * tensor);
         // tensor data access
         void         (*memset_tensor)(wsp_ggml_backend_buffer_t buffer,       struct wsp_ggml_tensor * tensor,     uint8_t value, size_t offset, size_t size);
         void         (*set_tensor)   (wsp_ggml_backend_buffer_t buffer,       struct wsp_ggml_tensor * tensor, const void * data, size_t offset, size_t size);
@@ -64,20 +65,20 @@ extern "C" {
         enum wsp_ggml_backend_buffer_usage usage;
     };
 
-    wsp_ggml_backend_buffer_t wsp_ggml_backend_buffer_init(
+    WSP_GGML_API wsp_ggml_backend_buffer_t wsp_ggml_backend_buffer_init(
                    wsp_ggml_backend_buffer_type_t buft,
             struct wsp_ggml_backend_buffer_i      iface,
                    void *                     context,
                    size_t                     size);
 
     // do not use directly, use wsp_ggml_backend_tensor_copy instead
-    bool wsp_ggml_backend_buffer_copy_tensor(const struct wsp_ggml_tensor * src, struct wsp_ggml_tensor * dst);
+    WSP_GGML_API bool wsp_ggml_backend_buffer_copy_tensor(const struct wsp_ggml_tensor * src, struct wsp_ggml_tensor * dst);
 
     // multi-buffer
     // buffer that contains a collection of buffers
-    wsp_ggml_backend_buffer_t wsp_ggml_backend_multi_buffer_alloc_buffer(wsp_ggml_backend_buffer_t * buffers, size_t n_buffers);
-    bool                  wsp_ggml_backend_buffer_is_multi_buffer(wsp_ggml_backend_buffer_t buffer);
-    void                  wsp_ggml_backend_multi_buffer_set_usage(wsp_ggml_backend_buffer_t buffer, enum wsp_ggml_backend_buffer_usage usage);
+    WSP_GGML_API wsp_ggml_backend_buffer_t wsp_ggml_backend_multi_buffer_alloc_buffer(wsp_ggml_backend_buffer_t * buffers, size_t n_buffers);
+    WSP_GGML_API bool                  wsp_ggml_backend_buffer_is_multi_buffer(wsp_ggml_backend_buffer_t buffer);
+    WSP_GGML_API void                  wsp_ggml_backend_multi_buffer_set_usage(wsp_ggml_backend_buffer_t buffer, enum wsp_ggml_backend_buffer_usage usage);
 
     //
     // Backend (stream)
@@ -88,19 +89,16 @@ extern "C" {
 
         void (*free)(wsp_ggml_backend_t backend);
 
-        // Will be moved to the device interface
-        // buffer allocation
-        wsp_ggml_backend_buffer_type_t (*get_default_buffer_type)(wsp_ggml_backend_t backend);
-
         // (optional) asynchronous tensor data access
         void (*set_tensor_async)(wsp_ggml_backend_t backend,       struct wsp_ggml_tensor * tensor, const void * data, size_t offset, size_t size);
         void (*get_tensor_async)(wsp_ggml_backend_t backend, const struct wsp_ggml_tensor * tensor,       void * data, size_t offset, size_t size);
         bool (*cpy_tensor_async)(wsp_ggml_backend_t backend_src, wsp_ggml_backend_t backend_dst, const struct wsp_ggml_tensor * src, struct wsp_ggml_tensor * dst);
 
-        // (optional) complete all pending operations
+        // (optional) complete all pending operations (required if the backend supports async operations)
         void (*synchronize)(wsp_ggml_backend_t backend);
 
-        // (optional) compute graph with a plan (not used currently)
+        // (optional) graph plans (not used currently)
+        // compute graph with a plan
         wsp_ggml_backend_graph_plan_t (*graph_plan_create) (wsp_ggml_backend_t backend, const struct wsp_ggml_cgraph * cgraph);
         void                      (*graph_plan_free)   (wsp_ggml_backend_t backend, wsp_ggml_backend_graph_plan_t plan);
         // update the plan with a new graph - this should be faster than creating a new plan when the graph has the same topology
@@ -110,13 +108,6 @@ extern "C" {
 
         // compute graph (always async if supported by the backend)
         enum wsp_ggml_status          (*graph_compute)     (wsp_ggml_backend_t backend, struct wsp_ggml_cgraph * cgraph);
-
-        // IMPORTANT: these functions have been moved to the device interface and will be removed from the backend interface
-        //            new backends should implement the device interface instead
-        // These functions are being moved to the device interface
-        bool (*supports_op)  (wsp_ggml_backend_t backend, const struct wsp_ggml_tensor * op);
-        bool (*supports_buft)(wsp_ggml_backend_t backend, wsp_ggml_backend_buffer_type_t buft);
-        bool (*offload_op)   (wsp_ggml_backend_t backend, const struct wsp_ggml_tensor * op);
 
         // (optional) event synchronization
         // record an event on this stream
@@ -210,17 +201,54 @@ extern "C" {
     };
 
     struct wsp_ggml_backend_reg {
-        // int api_version; // TODO: for dynamic loading
+        int api_version; // initialize to WSP_GGML_BACKEND_API_VERSION
         struct wsp_ggml_backend_reg_i iface;
         void * context;
     };
 
-
     // Internal backend registry API
-    void wsp_ggml_backend_register(wsp_ggml_backend_reg_t reg);
-    void wsp_ggml_backend_device_register(wsp_ggml_backend_dev_t device);
-    // TODO: backends can be loaded as a dynamic library, in which case it needs to export this function
-    // typedef wsp_ggml_backend_register_t * (*wsp_ggml_backend_init)(void);
+    WSP_GGML_API void wsp_ggml_backend_register(wsp_ggml_backend_reg_t reg);
+
+    // Add backend dynamic loading support to the backend
+
+    // Initialize the backend
+    typedef wsp_ggml_backend_reg_t (*wsp_ggml_backend_init_t)(void);
+    // Optional: obtain a score for the backend based on the system configuration
+    // Higher scores are preferred, 0 means the backend is not supported in the current system
+    typedef int                (*wsp_ggml_backend_score_t)(void);
+
+#ifdef WSP_GGML_BACKEND_DL
+#    ifdef __cplusplus
+#        define WSP_GGML_BACKEND_DL_IMPL(reg_fn)                             \
+            extern "C" {                                                 \
+            WSP_GGML_BACKEND_API wsp_ggml_backend_reg_t wsp_ggml_backend_init(void); \
+            }                                                            \
+            wsp_ggml_backend_reg_t wsp_ggml_backend_init(void) {                 \
+                return reg_fn();                                         \
+            }
+#        define WSP_GGML_BACKEND_DL_SCORE_IMPL(score_fn)       \
+            extern "C" {                                   \
+            WSP_GGML_BACKEND_API int wsp_ggml_backend_score(void); \
+            }                                              \
+            int wsp_ggml_backend_score(void) {                 \
+                return score_fn();                         \
+            }
+#    else
+#        define WSP_GGML_BACKEND_DL_IMPL(reg_fn)                              \
+            WSP_GGML_BACKEND_API wsp_ggml_backend_reg_t wsp_ggml_backend_init(void);  \
+            wsp_ggml_backend_reg_t                  wsp_ggml_backend_init(void) { \
+                return reg_fn();                                          \
+            }
+#        define WSP_GGML_BACKEND_DL_SCORE_IMPL(score_fn)        \
+            WSP_GGML_BACKEND_API int wsp_ggml_backend_score(void);  \
+            int                  wsp_ggml_backend_score(void) { \
+                return score_fn();                          \
+            }
+#    endif
+#else
+#    define WSP_GGML_BACKEND_DL_IMPL(reg_fn)
+#    define WSP_GGML_BACKEND_DL_SCORE_IMPL(score_fn)
+#endif
 
 #ifdef  __cplusplus
 }

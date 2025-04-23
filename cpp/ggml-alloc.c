@@ -37,6 +37,7 @@ static bool wsp_ggml_are_same_layout(const struct wsp_ggml_tensor * a, const str
     return true;
 }
 
+// ops that return true for this function must not use restrict pointers for their backend implementations
 static bool wsp_ggml_op_can_inplace(enum wsp_ggml_op op) {
     switch (op) {
         case WSP_GGML_OP_SCALE:
@@ -52,8 +53,12 @@ static bool wsp_ggml_op_can_inplace(enum wsp_ggml_op op) {
         case WSP_GGML_OP_LOG:
         case WSP_GGML_OP_UNARY:
         case WSP_GGML_OP_ROPE:
+        case WSP_GGML_OP_ROPE_BACK:
+        case WSP_GGML_OP_SILU_BACK:
         case WSP_GGML_OP_RMS_NORM:
+        case WSP_GGML_OP_RMS_NORM_BACK:
         case WSP_GGML_OP_SOFT_MAX:
+        case WSP_GGML_OP_SOFT_MAX_BACK:
             return true;
 
         default:
@@ -84,7 +89,7 @@ struct wsp_ggml_tallocr wsp_ggml_tallocr_new(wsp_ggml_backend_buffer_t buffer) {
     return talloc;
 }
 
-void wsp_ggml_tallocr_alloc(struct wsp_ggml_tallocr * talloc, struct wsp_ggml_tensor * tensor) {
+enum wsp_ggml_status wsp_ggml_tallocr_alloc(struct wsp_ggml_tallocr * talloc, struct wsp_ggml_tensor * tensor) {
     size_t size = wsp_ggml_backend_buffer_get_alloc_size(talloc->buffer, tensor);
     size = WSP_GGML_PAD(size, talloc->alignment);
 
@@ -99,7 +104,7 @@ void wsp_ggml_tallocr_alloc(struct wsp_ggml_tallocr * talloc, struct wsp_ggml_te
 
     assert(((uintptr_t)addr % talloc->alignment) == 0);
 
-    wsp_ggml_backend_tensor_alloc(talloc->buffer, tensor, addr);
+    return wsp_ggml_backend_tensor_alloc(talloc->buffer, tensor, addr);
 }
 
 // dynamic tensor allocator
@@ -466,18 +471,12 @@ static bool wsp_ggml_gallocr_is_own(wsp_ggml_gallocr_t galloc, struct wsp_ggml_t
     return wsp_ggml_gallocr_hash_get(galloc, t)->allocated;
 }
 
-static void wsp_ggml_gallocr_set_node_offset(wsp_ggml_gallocr_t galloc, struct wsp_ggml_tensor * node, int buffer_id, size_t offset) {
-    struct hash_node * hn = wsp_ggml_gallocr_hash_get(galloc, node);
-    hn->buffer_id = buffer_id;
-    hn->offset = offset;
-    hn->allocated = true;
-}
-
 static bool wsp_ggml_gallocr_is_allocated(wsp_ggml_gallocr_t galloc, struct wsp_ggml_tensor * t) {
     return t->data != NULL || wsp_ggml_gallocr_hash_get(galloc, t)->allocated;
 }
 
 static void wsp_ggml_gallocr_allocate_node(wsp_ggml_gallocr_t galloc, struct wsp_ggml_tensor * node, int buffer_id) {
+    WSP_GGML_ASSERT(buffer_id >= 0);
     struct hash_node * hn = wsp_ggml_gallocr_hash_get(galloc, node);
 
     if (!wsp_ggml_gallocr_is_allocated(galloc, node) && !wsp_ggml_is_view(node)) {
@@ -540,7 +539,6 @@ static void wsp_ggml_gallocr_allocate_node(wsp_ggml_gallocr_t galloc, struct wsp
         size_t offset = wsp_ggml_dyn_tallocr_alloc(alloc, size, node);
         hn->buffer_id = buffer_id;
         hn->offset = offset;
-        return;
     }
 }
 
@@ -816,7 +814,11 @@ static void wsp_ggml_gallocr_init_tensor(wsp_ggml_gallocr_t galloc, struct wsp_g
 }
 
 static bool wsp_ggml_gallocr_node_needs_realloc(wsp_ggml_gallocr_t galloc, struct wsp_ggml_tensor * node, struct tensor_alloc * talloc) {
-    size_t node_size = (node->data || node->view_src) ? 0 : wsp_ggml_backend_buft_get_alloc_size(galloc->bufts[talloc->buffer_id], node);
+    size_t node_size = 0;
+    if (!node->data && !node->view_src) {
+        WSP_GGML_ASSERT(talloc->buffer_id >= 0); // prevent segfault when misusing the API
+        node_size = wsp_ggml_backend_buft_get_alloc_size(galloc->bufts[talloc->buffer_id], node);
+    }
     return talloc->size_max >= node_size;
 }
 
@@ -931,41 +933,50 @@ size_t wsp_ggml_gallocr_get_buffer_size(wsp_ggml_gallocr_t galloc, int buffer_id
 
 // utils
 
+static void free_buffers(wsp_ggml_backend_buffer_t ** buffers, const size_t * n_buffers) {
+    for (size_t i = 0; i < *n_buffers; i++) {
+        wsp_ggml_backend_buffer_free((*buffers)[i]);
+    }
+    free(*buffers);
+}
+
 static bool alloc_tensor_range(struct wsp_ggml_context * ctx,
         struct wsp_ggml_tensor * first, struct wsp_ggml_tensor * last,
         wsp_ggml_backend_buffer_type_t buft, size_t size,
         wsp_ggml_backend_buffer_t ** buffers, size_t * n_buffers) {
+
     wsp_ggml_backend_buffer_t buffer = wsp_ggml_backend_buft_alloc_buffer(buft, size);
     if (buffer == NULL) {
-#ifndef NDEBUG
-        WSP_GGML_LOG_DEBUG("%s: failed to allocate %s buffer of size %zu\n", __func__, wsp_ggml_backend_buft_name(buft), size);
-#endif
-        for (size_t i = 0; i < *n_buffers; i++) {
-            wsp_ggml_backend_buffer_free((*buffers)[i]);
-        }
-        free(*buffers);
+        WSP_GGML_LOG_ERROR("%s: failed to allocate %s buffer of size %zu\n", __func__, wsp_ggml_backend_buft_name(buft), size);
+        free_buffers(buffers, n_buffers);
         return false;
-    }
-
-    struct wsp_ggml_tallocr tallocr = wsp_ggml_tallocr_new(buffer);
-
-    for (struct wsp_ggml_tensor * t = first; t != last; t = wsp_ggml_get_next_tensor(ctx, t)) {
-        if (t->data == NULL) {
-            if (t->view_src == NULL) {
-                wsp_ggml_tallocr_alloc(&tallocr, t);
-            } else if (t->buffer == NULL) {
-                wsp_ggml_backend_view_init(t);
-            }
-        } else {
-            if (t->view_src != NULL && t->buffer == NULL) {
-                // view of a pre-allocated tensor
-                wsp_ggml_backend_view_init(t);
-            }
-        }
     }
 
     *buffers = realloc(*buffers, sizeof(wsp_ggml_backend_buffer_t) * (*n_buffers + 1));
     (*buffers)[(*n_buffers)++] = buffer;
+
+    struct wsp_ggml_tallocr tallocr = wsp_ggml_tallocr_new(buffer);
+
+    for (struct wsp_ggml_tensor * t = first; t != last; t = wsp_ggml_get_next_tensor(ctx, t)) {
+        enum wsp_ggml_status status = WSP_GGML_STATUS_SUCCESS;
+        if (t->data == NULL) {
+            if (t->view_src == NULL) {
+                status = wsp_ggml_tallocr_alloc(&tallocr, t);
+            } else if (t->buffer == NULL) {
+                status = wsp_ggml_backend_view_init(t);
+            }
+        } else {
+            if (t->view_src != NULL && t->buffer == NULL) {
+                // view of a pre-allocated tensor
+                status = wsp_ggml_backend_view_init(t);
+            }
+        }
+        if (status != WSP_GGML_STATUS_SUCCESS) {
+            WSP_GGML_LOG_ERROR("%s: failed to initialize tensor %s\n", __func__, t->name);
+            free_buffers(buffers, n_buffers);
+            return false;
+        }
+    }
 
     return true;
 }
@@ -987,19 +998,7 @@ wsp_ggml_backend_buffer_t wsp_ggml_backend_alloc_ctx_tensors_from_buft(struct ws
             this_size = WSP_GGML_PAD(wsp_ggml_backend_buft_get_alloc_size(buft, t), alignment);
         }
 
-        if (this_size > max_size) {
-            WSP_GGML_LOG_ERROR("%s: tensor %s is too large to fit in a %s buffer (tensor size: %zu, max buffer size: %zu)\n",
-                    __func__, t->name,
-                    wsp_ggml_backend_buft_name(buft),
-                    this_size, max_size);
-            for (size_t i = 0; i < n_buffers; i++) {
-                wsp_ggml_backend_buffer_free(buffers[i]);
-            }
-            free(buffers);
-            return NULL;
-        }
-
-        if ((cur_buf_size + this_size) > max_size) {
+        if (cur_buf_size > 0 && (cur_buf_size + this_size) > max_size) {
             // allocate tensors in the current buffer
             if (!alloc_tensor_range(ctx, first, t, buft, cur_buf_size, &buffers, &n_buffers)) {
                 return NULL;

@@ -82,6 +82,7 @@ RCT_REMAP_METHOD(initContext,
         noMetal:!useGpu
         useFlashAttn:useFlashAttn
     ];
+
     if ([context getContext] == NULL) {
         reject(@"whisper_cpp_error", @"Failed to load the model", nil);
         return;
